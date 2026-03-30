@@ -1,0 +1,15 @@
+{
+  "name": "docker-prom-metrics-service",
+  "version": "0.0.0",
+  "description": "Microservice collecting docker metrics in a prom file",
+  "type": "module",
+  "author": "redpencil <info@redpencil.io>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/redpencilio/docker-prom-metrics-service.git"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.2"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "docker-prom-metrics-service",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Microservice collecting docker metrics in a prom file",
   "type": "module",
   "author": "redpencil <info@redpencil.io>",

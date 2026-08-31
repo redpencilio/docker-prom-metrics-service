@@ -221,9 +221,8 @@ function metricLabels(container) {
 function writePromFile(containers, dockerVersionInfo) {
   const lines = ['# Produced by docker-prom-metrics', ''];
 
-  for (const { name, type, description } of METRICS_DATA) {
-    lines.push(`# HELP ${name} ${description}`);
-    lines.push(`# TYPE ${name} ${type}`);
+  for (const metric of METRICS_DATA) {
+    lines.push(...metricHeaders(metric));
   }
   lines.push('');
 
@@ -243,8 +242,13 @@ function writePromFile(containers, dockerVersionInfo) {
 
   // Docker Compose Versions per Project
   if (projectComposeVersions.size > 0) {
-    lines.push('# HELP docker_compose_version_info Docker Compose version used to deploy projects');
-    lines.push('# TYPE docker_compose_version_info gauge');
+    lines.push(
+      ...metricHeaders({
+        name: 'docker_compose_version_info',
+        description: 'Docker Compose version used to deploy projects',
+        type: 'gauge',
+      })
+    );
     for (const [project, version] of projectComposeVersions.entries()) {
       lines.push(`docker_compose_version_info{docker_compose_project="${project}",version="${version}"} 1`);
     }
@@ -253,8 +257,13 @@ function writePromFile(containers, dockerVersionInfo) {
 
   // Docker Engine and API Version (global for host)
   if (dockerVersionInfo?.Version) {
-    lines.push('# HELP docker_version_info Docker Engine and Api version');
-    lines.push('# TYPE docker_version_info gauge');
+    lines.push(
+      ...metricHeaders({
+        name: 'docker_version_info',
+        description: 'Docker Engine and Api version',
+        type: 'gauge',
+      })
+    );
     lines.push(
       `docker_version_info{version="${dockerVersionInfo.Version}",api_version="${dockerVersionInfo.ApiVersion}"} 1`
     );
@@ -268,6 +277,11 @@ function writePromFile(containers, dockerVersionInfo) {
   const tmp = PROM_FILE + '.tmp';
   writeFileSync(tmp, promMetrics, 'utf8');
   renameSync(tmp, PROM_FILE);
+}
+
+// gives HELP and TYPE lines for given params
+function metricHeaders({ name, description, type }) {
+  return [`# HELP ${name} ${description}`, `# TYPE ${name} ${type}`];
 }
 
 // Docker stats helpers

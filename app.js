@@ -144,7 +144,8 @@ async function scrapeAll() {
     const batch = containers.slice(i, i + BATCH_SIZE);
     containerMetrics.push(...await Promise.all(batch.map(scrapeContainer)));
   }
-  writePromFile(containerMetrics);
+  const dockerVersionInfo = await docker.version();
+  writePromFile(containerMetrics, dockerVersionInfo);
 
   console.log(`Scraped ${containers.length} containers`);
 }
@@ -216,7 +217,7 @@ function metricLabels(container) {
   return `{${labels.join(',')}}`;
 }
 
-function writePromFile(containers) {
+function writePromFile(containers, dockerVersionInfo) {
   const lines = ['# Produced by docker-prom-metrics', ''];
 
   for (const { name, type, description } of METRICS_DATA) {
@@ -232,6 +233,16 @@ function writePromFile(containers) {
       if (value !== undefined)
         lines.push(`${name}${labels} ${value}`);
     }
+    lines.push('');
+  }
+
+  // Docker Engine and API Version (global for host)
+  if (dockerVersionInfo?.Version) {
+    lines.push('# HELP docker_version_info Docker Engine and Api version');
+    lines.push('# TYPE docker_version_info gauge');
+    lines.push(
+      `docker_version_info{version="${dockerVersionInfo.Version}",api_version="${dockerVersionInfo.ApiVersion}"} 1`
+    );
     lines.push('');
   }
 

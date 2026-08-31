@@ -172,6 +172,7 @@ async function scrapeContainer(containerInfo) {
       oomKilled: inspect?.State?.OOMKilled ? 1 : 0,
       composeProject: inspectLabels['com.docker.compose.project'],
       composeService: inspectLabels['com.docker.compose.service'],
+      composeVersion: inspectLabels['com.docker.compose.version'],
       duration: (Date.now() - t0) / 1000,
     };
 
@@ -226,12 +227,26 @@ function writePromFile(containers, dockerVersionInfo) {
   }
   lines.push('');
 
+  const projectComposeVersions = new Map();
   for (const container of containers) {
+    if (container.composeProject && container.composeVersion) {
+      projectComposeVersions.set(container.composeProject, container.composeVersion);
+    }
     const labels = metricLabels(container);
     for (const { name, metric } of METRICS_DATA) {
       const value = metric(container);
       if (value !== undefined)
         lines.push(`${name}${labels} ${value}`);
+    }
+    lines.push('');
+  }
+
+  // Docker Compose Versions per Project
+  if (projectComposeVersions.size > 0) {
+    lines.push('# HELP docker_compose_version_info Docker Compose version used to deploy projects');
+    lines.push('# TYPE docker_compose_version_info gauge');
+    for (const [project, version] of projectComposeVersions.entries()) {
+      lines.push(`docker_compose_version_info{docker_compose_project="${project}",version="${version}"} 1`);
     }
     lines.push('');
   }

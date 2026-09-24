@@ -144,7 +144,8 @@ async function scrapeAll() {
     const batch = containers.slice(i, i + BATCH_SIZE);
     containerMetrics.push(...await Promise.all(batch.map(scrapeContainer)));
   }
-  writePromFile(containerMetrics);
+  const dockerVersionInfo = await docker.version();
+  writePromFile(containerMetrics, dockerVersionInfo);
 
   console.log(`Scraped ${containers.length} containers`);
 }
@@ -171,6 +172,7 @@ async function scrapeContainer(containerInfo) {
       oomKilled: inspect?.State?.OOMKilled ? 1 : 0,
       composeProject: inspectLabels['com.docker.compose.project'],
       composeService: inspectLabels['com.docker.compose.service'],
+      composeVersion: inspectLabels['com.docker.compose.version'],
       duration: (Date.now() - t0) / 1000,
     };
 
@@ -216,22 +218,55 @@ function metricLabels(container) {
   return `{${labels.join(',')}}`;
 }
 
-function writePromFile(containers) {
+function writePromFile(containers, dockerVersionInfo) {
   const lines = ['# Produced by docker-prom-metrics', ''];
 
-  for (const { name, type, description } of METRICS_DATA) {
-    lines.push(`# HELP ${name} ${description}`);
-    lines.push(`# TYPE ${name} ${type}`);
+  for (const metric of METRICS_DATA) {
+    lines.push(...metricHeaders(metric));
   }
   lines.push('');
 
+  const projectComposeVersions = new Map();
   for (const container of containers) {
+    if (container.composeProject && container.composeVersion) {
+      projectComposeVersions.set(container.composeProject, container.composeVersion);
+    }
     const labels = metricLabels(container);
     for (const { name, metric } of METRICS_DATA) {
       const value = metric(container);
       if (value !== undefined)
         lines.push(`${name}${labels} ${value}`);
     }
+    lines.push('');
+  }
+
+  // Docker Compose Versions per Project
+  if (projectComposeVersions.size > 0) {
+    lines.push(
+      ...metricHeaders({
+        name: 'docker_compose_version_info',
+        description: 'Docker Compose version used to deploy projects',
+        type: 'gauge',
+      })
+    );
+    for (const [project, version] of projectComposeVersions.entries()) {
+      lines.push(`docker_compose_version_info{docker_compose_project="${project}",version="${version}"} 1`);
+    }
+    lines.push('');
+  }
+
+  // Docker Engine and API Version (global for host)
+  if (dockerVersionInfo?.Version) {
+    lines.push(
+      ...metricHeaders({
+        name: 'docker_version_info',
+        description: 'Docker Engine and Api version',
+        type: 'gauge',
+      })
+    );
+    lines.push(
+      `docker_version_info{version="${dockerVersionInfo.Version}",api_version="${dockerVersionInfo.ApiVersion}"} 1`
+    );
     lines.push('');
   }
 
@@ -242,6 +277,11 @@ function writePromFile(containers) {
   const tmp = PROM_FILE + '.tmp';
   writeFileSync(tmp, promMetrics, 'utf8');
   renameSync(tmp, PROM_FILE);
+}
+
+// gives HELP and TYPE lines for given params
+function metricHeaders({ name, description, type }) {
+  return [`# HELP ${name} ${description}`, `# TYPE ${name} ${type}`];
 }
 
 // Docker stats helpers
